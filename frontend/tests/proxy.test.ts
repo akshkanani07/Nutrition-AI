@@ -142,7 +142,7 @@ test("5. TRUST_EDGE_PROXY controls X-Forwarded-For forwarding", async () => {
       headers: { "x-forwarded-for": "9.9.9.9, 1.2.3.4" },
     });
     await handleAnalyzeProxy(reqFalse, "http://127.0.0.1:8000");
-    const sentHeaderFalse = (capturedHeaders as Record<string, string>)?.[
+    const sentHeaderFalse = (capturedHeaders as unknown as Record<string, string>)?.[
       "X-Forwarded-For"
     ];
     assert.equal(sentHeaderFalse, undefined, "When false, no X-Forwarded-For must be sent");
@@ -154,7 +154,7 @@ test("5. TRUST_EDGE_PROXY controls X-Forwarded-For forwarding", async () => {
       headers: { "x-forwarded-for": "9.9.9.9, 1.2.3.4" },
     });
     await handleAnalyzeProxy(reqTrueWithHeader, "http://127.0.0.1:8000");
-    const sentHeaderTrue = (capturedHeaders as Record<string, string>)?.[
+    const sentHeaderTrue = (capturedHeaders as unknown as Record<string, string>)?.[
       "X-Forwarded-For"
     ];
     assert.equal(sentHeaderTrue, "1.2.3.4", "When true, forwards strictly the rightmost entry");
@@ -163,7 +163,7 @@ test("5. TRUST_EDGE_PROXY controls X-Forwarded-For forwarding", async () => {
     capturedHeaders = undefined;
     const { req: reqTrueNoHeader } = createMockRequest();
     await handleAnalyzeProxy(reqTrueNoHeader, "http://127.0.0.1:8000");
-    const sentHeaderEmpty = (capturedHeaders as Record<string, string>)?.[
+    const sentHeaderEmpty = (capturedHeaders as unknown as Record<string, string>)?.[
       "X-Forwarded-For"
     ];
     assert.equal(sentHeaderEmpty, undefined, "When true with no header, no X-Forwarded-For must be sent");
