@@ -208,7 +208,7 @@ export default function HomePage() {
               <CardTitle className="text-lg">Deterministic Engine</CardTitle>
             </CardHeader>
             <CardContent className="text-xs text-slate-600 leading-relaxed">
-              Nutrition values scale deterministically from curated USDA & verified databases. Zero AI hallucination of calories or macros.
+              Nutrition values scale deterministically from curated USDA & verified databases. Deterministic calculations compute macros and calories directly from verified reference data.
             </CardContent>
           </Card>
 
@@ -218,7 +218,7 @@ export default function HomePage() {
               <CardTitle className="text-lg">Meal Health Score</CardTitle>
             </CardHeader>
             <CardContent className="text-xs text-slate-600 leading-relaxed">
-              Every meal receives a clear score out of 100 with category breakdowns: protein, fiber, sugar, saturated fat, and sodium.
+              Every meal receives a clear score out of 100 with category breakdowns: protein, fiber, sugar, fat balance, and sodium.
             </CardContent>
           </Card>
 

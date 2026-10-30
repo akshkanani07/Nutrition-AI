@@ -76,9 +76,15 @@ export async function handleAnalyzeProxy(
   const onClientAbort = () => controller.abort();
   request.signal.addEventListener("abort", onClientAbort);
 
+  // Server-determined client IP: do NOT forward client-supplied X-Forwarded-For to prevent spoofing
+  const serverDeterminedIp = request.ip || "127.0.0.1";
+
   try {
     const backendResponse = await fetch(`${backendUrl}/api/v1/analyze-food`, {
       method: "POST",
+      headers: {
+        "X-Forwarded-For": serverDeterminedIp,
+      },
       body: backendFormData,
       signal: controller.signal,
     });
@@ -131,10 +137,12 @@ export async function handleAnalyzeProxy(
       );
     }
 
+    // Log the real error on the server; return generic message to client to avoid information leakage
+    console.error("Analysis proxy unexpected error:", err);
     return makeErrorResponse(
       500,
       "INTERNAL_ERROR",
-      err instanceof Error ? err.message : "An unexpected proxy error occurred."
+      "An unexpected error occurred."
     );
   }
 }
