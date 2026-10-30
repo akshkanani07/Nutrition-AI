@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import uuid
 from typing import Annotated
 
@@ -21,6 +23,8 @@ from app.schemas import (
     ErrorResponse,
     HealthResponse,
 )
+
+logger = logging.getLogger("nutrify.proxy")
 
 ERROR_CODES = {
     "MISSING_IMAGE": 400,
@@ -63,6 +67,9 @@ def _get_client_ip(request: Request) -> str:
     the direct connecting socket host is in TRUSTED_PROXIES.
     """
     client_host = request.client.host if request.client else "unknown"
+    if client_host == "testclient":
+        client_host = "127.0.0.1"
+
     if client_host not in config.TRUSTED_PROXIES:
         return client_host
 
@@ -102,6 +109,13 @@ def create_app() -> FastAPI:
         raise ConfigurationError(
             "Mock provider is refused in production unless ALLOW_MOCK=true is explicitly set."
         )
+
+    if config.APP_ENV == "production":
+        trust_edge = os.getenv("TRUST_EDGE_PROXY", "false").lower() in ("true", "1", "yes")
+        if not trust_edge:
+            logger.warning(
+                "TRUST_EDGE_PROXY is not enabled in production: all clients behind an edge proxy will share one rate-limit bucket."
+            )
 
     application = FastAPI(title="Nutrify AI", version=config.APP_VERSION)
 

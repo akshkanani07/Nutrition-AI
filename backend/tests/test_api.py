@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import io
+import logging
+import time
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,7 @@ from fastapi.testclient import TestClient
 from app import config
 from app.exceptions import ConfigurationError
 from app.main import create_app
+from app.rate_limit import RateLimiter
 from tests.conftest import make_gif, make_jpeg, make_png, make_webp
 
 
@@ -148,6 +151,20 @@ class TestProviderBehaviour:
         monkeypatch.setattr(config, "ALLOW_MOCK", True)
         test_app = create_app()
         assert test_app is not None
+
+    def test_production_warning_when_trust_edge_proxy_not_true(self, monkeypatch, caplog):
+        monkeypatch.setattr(config, "APP_ENV", "production")
+        monkeypatch.setattr(config, "AI_PROVIDER", "mock")
+        monkeypatch.setattr(config, "ALLOW_MOCK", True)
+        monkeypatch.delenv("TRUST_EDGE_PROXY", raising=False)
+        with caplog.at_level(logging.WARNING):
+            test_app = create_app()
+            assert test_app is not None
+            assert any(
+                "TRUST_EDGE_PROXY is not enabled in production" in r.message
+                for r in caplog.records
+                if r.levelno == logging.WARNING
+            )
 
     def test_ml_model_503_without_weights(self, ml_client):
         data = make_jpeg()
@@ -311,6 +328,25 @@ class TestRateLimit:
         )
         assert resp.status_code == 429
         assert resp.json()["error"]["code"] == "RATE_LIMITED"
+
+    def test_rate_limiter_pruning_deletes_empty_bucket(self):
+        limiter = RateLimiter(max_requests=5, window_seconds=1)
+        client_ip = "192.0.2.1"
+        assert limiter.is_allowed(client_ip) is True
+        assert client_ip in limiter._hits
+
+        # Advance past window and prune
+        future = time.monotonic() + 2.0
+        limiter.prune(now=future)
+        assert client_ip not in limiter._hits
+
+    def test_invalid_client_ip_does_not_create_bucket(self):
+        limiter = RateLimiter(max_requests=5, window_seconds=60)
+        invalid_ips = ["not-an-ip", "999.999.999.999", "", "abc.def", "127.0.0.1; DROP TABLE"]
+        for bad_ip in invalid_ips:
+            assert limiter.is_allowed(bad_ip) is False
+            assert bad_ip not in limiter._hits
+        assert len(limiter._hits) == 0
 
 
 # ---------------------------------------------------------------------------

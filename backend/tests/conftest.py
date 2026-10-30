@@ -31,7 +31,7 @@ def client():
     config.AI_PROVIDER = "mock"
     config.ALLOW_MOCK = True
     app.state.provider = None
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 @pytest.fixture()
@@ -40,7 +40,7 @@ def ml_client():
     config.AI_PROVIDER = "ml_model"
     config.ALLOW_MOCK = False
     app.state.provider = None
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))
 
 
 def make_jpeg(width: int = 200, height: int = 200) -> bytes:
