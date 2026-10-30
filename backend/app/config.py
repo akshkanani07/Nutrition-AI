@@ -43,6 +43,8 @@ MAX_LONG_SIDE_PX: int = 1024
 # ---------------------------------------------------------------------------
 RATE_LIMIT_MAX_REQUESTS: int = 10
 RATE_LIMIT_WINDOW_SECONDS: int = 60
+# TRUSTED_PROXIES must list only the immediate upstream hops you control
+# (e.g. the local Next.js BFF or your internal reverse proxy/load balancer).
 TRUSTED_PROXIES: list[str] = [
     proxy.strip()
     for proxy in os.getenv("TRUSTED_PROXIES", "127.0.0.1").split(",")

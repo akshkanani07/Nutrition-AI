@@ -36,3 +36,7 @@ ml/models/*.pt
 .env
 .env.local
 .env.*.local
+
+# Archive
+_archive/
+

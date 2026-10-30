@@ -56,11 +56,26 @@ def _error_response(
 
 
 def _get_client_ip(request: Request) -> str:
-    """Extract client IP, honouring X-Forwarded-For from trusted proxies."""
+    """Extract client IP, honouring X-Forwarded-For from trusted proxies.
+
+    Walks X-Forwarded-For from right to left and returns the first entry
+    that is not in TRUSTED_PROXIES. The header is only evaluated when
+    the direct connecting socket host is in TRUSTED_PROXIES.
+    """
     client_host = request.client.host if request.client else "unknown"
+    if client_host not in config.TRUSTED_PROXIES:
+        return client_host
+
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded and client_host in config.TRUSTED_PROXIES:
-        return forwarded.split(",")[0].strip()
+    if not forwarded:
+        return client_host
+
+    # Walk right-to-left
+    hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+    for hop in reversed(hops):
+        if hop not in config.TRUSTED_PROXIES:
+            return hop
+
     return client_host
 
 

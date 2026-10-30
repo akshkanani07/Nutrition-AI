@@ -229,6 +229,89 @@ class TestRateLimit:
         assert body["error"]["code"] == "RATE_LIMITED"
         assert body["error"]["retryable"] is True
 
+    def test_direct_untrusted_socket_ignores_spoofed_header(self, monkeypatch):
+        monkeypatch.setattr(config, "TRUSTED_PROXIES", ["127.0.0.1"])
+        app = create_app()
+        tc = TestClient(app, client=("198.51.100.1", 50000))
+        data = make_jpeg()
+
+        # Send 10 requests with different spoofed X-Forwarded-For headers
+        for i in range(10):
+            resp = tc.post(
+                "/api/v1/analyze-food",
+                files={"image": ("test.jpg", io.BytesIO(data), "image/jpeg")},
+                headers={"X-Forwarded-For": f"1.1.1.{i}"},
+            )
+            assert resp.status_code == 200
+
+        # 11th request is rate limited because all requests share the untrusted socket bucket
+        resp = tc.post(
+            "/api/v1/analyze-food",
+            files={"image": ("test.jpg", io.BytesIO(data), "image/jpeg")},
+            headers={"X-Forwarded-For": "2.2.2.2"},
+        )
+        assert resp.status_code == 429
+        assert resp.json()["error"]["code"] == "RATE_LIMITED"
+        assert "198.51.100.1" in app.state.rate_limiter._hits
+        assert "2.2.2.2" not in app.state.rate_limiter._hits
+
+    def test_trusted_socket_with_intermediate_trusted_proxy(self, monkeypatch):
+        monkeypatch.setattr(config, "TRUSTED_PROXIES", ["127.0.0.1", "10.0.0.5"])
+        app = create_app()
+        tc = TestClient(app, client=("127.0.0.1", 50000))
+        data = make_jpeg()
+
+        # Header: "1.2.3.4, 10.0.0.5" -> walking right-to-left: 10.0.0.5 is trusted, 1.2.3.4 is untrusted client
+        for _ in range(10):
+            resp = tc.post(
+                "/api/v1/analyze-food",
+                files={"image": ("test.jpg", io.BytesIO(data), "image/jpeg")},
+                headers={"X-Forwarded-For": "1.2.3.4, 10.0.0.5"},
+            )
+            assert resp.status_code == 200
+
+        # Bucket belongs to 1.2.3.4
+        assert "1.2.3.4" in app.state.rate_limiter._hits
+        assert "10.0.0.5" not in app.state.rate_limiter._hits
+        assert "127.0.0.1" not in app.state.rate_limiter._hits
+
+        # 11th request for client 1.2.3.4 is rate-limited
+        resp = tc.post(
+            "/api/v1/analyze-food",
+            files={"image": ("test.jpg", io.BytesIO(data), "image/jpeg")},
+            headers={"X-Forwarded-For": "1.2.3.4, 10.0.0.5"},
+        )
+        assert resp.status_code == 429
+        assert resp.json()["error"]["code"] == "RATE_LIMITED"
+
+    def test_trusted_socket_resolves_rightmost_untrusted_client(self, monkeypatch):
+        monkeypatch.setattr(config, "TRUSTED_PROXIES", ["127.0.0.1"])
+        app = create_app()
+        tc = TestClient(app, client=("127.0.0.1", 50000))
+        data = make_jpeg()
+
+        # Header: "9.9.9.9, 1.2.3.4" -> walking right-to-left: 1.2.3.4 is first untrusted IP
+        for _ in range(10):
+            resp = tc.post(
+                "/api/v1/analyze-food",
+                files={"image": ("test.jpg", io.BytesIO(data), "image/jpeg")},
+                headers={"X-Forwarded-For": "9.9.9.9, 1.2.3.4"},
+            )
+            assert resp.status_code == 200
+
+        # Bucket belongs to 1.2.3.4, not 9.9.9.9
+        assert "1.2.3.4" in app.state.rate_limiter._hits
+        assert "9.9.9.9" not in app.state.rate_limiter._hits
+
+        # 11th request for 1.2.3.4 is rate limited
+        resp = tc.post(
+            "/api/v1/analyze-food",
+            files={"image": ("test.jpg", io.BytesIO(data), "image/jpeg")},
+            headers={"X-Forwarded-For": "9.9.9.9, 1.2.3.4"},
+        )
+        assert resp.status_code == 429
+        assert resp.json()["error"]["code"] == "RATE_LIMITED"
+
 
 # ---------------------------------------------------------------------------
 # CORS

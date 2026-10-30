@@ -76,18 +76,32 @@ export async function handleAnalyzeProxy(
   const onClientAbort = () => controller.abort();
   request.signal.addEventListener("abort", onClientAbort);
 
-  // Server-determined client IP: do NOT forward client-supplied X-Forwarded-For to prevent spoofing
-  const serverDeterminedIp = request.ip || "127.0.0.1";
+  // Resolve headers based on TRUST_EDGE_PROXY (read at request time, default false)
+  const trustEdgeProxy = process.env.TRUST_EDGE_PROXY === "true";
+  const backendHeaders: Record<string, string> = {};
+
+  if (trustEdgeProxy) {
+    const incomingXff = request.headers.get("x-forwarded-for");
+    if (incomingXff) {
+      const hops = incomingXff.split(",").map((h) => h.trim()).filter(Boolean);
+      if (hops.length > 0) {
+        // Forward ONLY the rightmost entry
+        backendHeaders["X-Forwarded-For"] = hops[hops.length - 1];
+      }
+    }
+  }
+
+  const fetchOptions: RequestInit = {
+    method: "POST",
+    body: backendFormData,
+    signal: controller.signal,
+  };
+  if (Object.keys(backendHeaders).length > 0) {
+    fetchOptions.headers = backendHeaders;
+  }
 
   try {
-    const backendResponse = await fetch(`${backendUrl}/api/v1/analyze-food`, {
-      method: "POST",
-      headers: {
-        "X-Forwarded-For": serverDeterminedIp,
-      },
-      body: backendFormData,
-      signal: controller.signal,
-    });
+    const backendResponse = await fetch(`${backendUrl}/api/v1/analyze-food`, fetchOptions);
 
     clearTimeout(timeoutId);
     request.signal.removeEventListener("abort", onClientAbort);

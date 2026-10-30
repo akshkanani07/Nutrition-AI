@@ -121,31 +121,13 @@ test("4. timeout mapping maps AbortError to 504 ANALYSIS_TIMEOUT", async () => {
   }
 });
 
-test("5. two requests with different spoofed X-Forwarded-For values, sent from the same socket, share one rate-limit bucket", async () => {
+test("5. TRUST_EDGE_PROXY controls X-Forwarded-For forwarding", async () => {
   const originalFetch = global.fetch;
+  const originalEnv = process.env.TRUST_EDGE_PROXY;
 
-  // Simulate backend rate-limiting bucket with capacity = 1 per forwarded IP
-  const bucketCounts = new Map<string, number>();
-  const forwardedIps: string[] = [];
-
+  let capturedHeaders: HeadersInit | undefined;
   global.fetch = async (_url: any, init?: RequestInit) => {
-    const headers = init?.headers as Record<string, string>;
-    const forwardedIp = headers?.["X-Forwarded-For"] || "unknown";
-    forwardedIps.push(forwardedIp);
-
-    const count = (bucketCounts.get(forwardedIp) || 0) + 1;
-    bucketCounts.set(forwardedIp, count);
-
-    if (count > 1) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: { code: "RATE_LIMITED", message: "Too many requests" },
-        }),
-        { status: 429, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
+    capturedHeaders = init?.headers;
     return new Response(
       JSON.stringify({ success: true, items: [] }),
       { status: 200, headers: { "Content-Type": "application/json" } }
@@ -153,31 +135,41 @@ test("5. two requests with different spoofed X-Forwarded-For values, sent from t
   };
 
   try {
-    // Request 1: Client spoofs IP "203.0.113.195", but socket is from local server (e.g. 127.0.0.1)
-    const { req: req1 } = createMockRequest({
-      headers: { "x-forwarded-for": "203.0.113.195" },
-      ip: "127.0.0.1",
+    // 5a. When false: ignores any incoming X-Forwarded-For header and sends nothing
+    process.env.TRUST_EDGE_PROXY = "false";
+    capturedHeaders = undefined;
+    const { req: reqFalse } = createMockRequest({
+      headers: { "x-forwarded-for": "9.9.9.9, 1.2.3.4" },
     });
-    const res1 = await handleAnalyzeProxy(req1, "http://127.0.0.1:8000");
-    assert.equal(res1.status, 200, "First request from socket should succeed");
+    await handleAnalyzeProxy(reqFalse, "http://127.0.0.1:8000");
+    const sentHeaderFalse = (capturedHeaders as Record<string, string>)?.[
+      "X-Forwarded-For"
+    ];
+    assert.equal(sentHeaderFalse, undefined, "When false, no X-Forwarded-For must be sent");
 
-    // Request 2: Same socket (127.0.0.1) attempts to bypass limit by spoofing IP "198.51.100.42"
-    const { req: req2 } = createMockRequest({
-      headers: { "x-forwarded-for": "198.51.100.42" },
-      ip: "127.0.0.1",
+    // 5b. When true: forwards ONLY the rightmost entry ("1.2.3.4") from "9.9.9.9, 1.2.3.4"
+    process.env.TRUST_EDGE_PROXY = "true";
+    capturedHeaders = undefined;
+    const { req: reqTrueWithHeader } = createMockRequest({
+      headers: { "x-forwarded-for": "9.9.9.9, 1.2.3.4" },
     });
-    const res2 = await handleAnalyzeProxy(req2, "http://127.0.0.1:8000");
+    await handleAnalyzeProxy(reqTrueWithHeader, "http://127.0.0.1:8000");
+    const sentHeaderTrue = (capturedHeaders as Record<string, string>)?.[
+      "X-Forwarded-For"
+    ];
+    assert.equal(sentHeaderTrue, "1.2.3.4", "When true, forwards strictly the rightmost entry");
 
-    // Both requests forwarded the socket's server-determined IP, ignoring the spoofed headers
-    assert.equal(forwardedIps[0], "127.0.0.1");
-    assert.equal(forwardedIps[1], "127.0.0.1");
-
-    // Second request is rate limited because both requests shared the same bucket
-    assert.equal(res2.status, 429, "Second request from same socket must be rate-limited despite spoofed header");
-    const body2 = await res2.json();
-    assert.equal(body2.error.code, "RATE_LIMITED");
+    // 5c. When true with no header: forwards nothing
+    capturedHeaders = undefined;
+    const { req: reqTrueNoHeader } = createMockRequest();
+    await handleAnalyzeProxy(reqTrueNoHeader, "http://127.0.0.1:8000");
+    const sentHeaderEmpty = (capturedHeaders as Record<string, string>)?.[
+      "X-Forwarded-For"
+    ];
+    assert.equal(sentHeaderEmpty, undefined, "When true with no header, no X-Forwarded-For must be sent");
   } finally {
     global.fetch = originalFetch;
+    process.env.TRUST_EDGE_PROXY = originalEnv;
   }
 });
 
