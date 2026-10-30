@@ -169,7 +169,11 @@ test("5. TRUST_EDGE_PROXY controls X-Forwarded-For forwarding", async () => {
     assert.equal(sentHeaderEmpty, undefined, "When true with no header, no X-Forwarded-For must be sent");
   } finally {
     global.fetch = originalFetch;
-    process.env.TRUST_EDGE_PROXY = originalEnv;
+    if (originalEnv === undefined) {
+      delete process.env.TRUST_EDGE_PROXY;
+    } else {
+      process.env.TRUST_EDGE_PROXY = originalEnv;
+    }
   }
 });
 

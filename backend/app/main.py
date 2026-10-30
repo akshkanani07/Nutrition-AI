@@ -66,9 +66,7 @@ def _get_client_ip(request: Request) -> str:
     that is not in TRUSTED_PROXIES. The header is only evaluated when
     the direct connecting socket host is in TRUSTED_PROXIES.
     """
-    client_host = request.client.host if request.client else "unknown"
-    if client_host == "testclient":
-        client_host = "127.0.0.1"
+    client_host = request.client.host if (request.client and request.client.host) else "unknown"
 
     if client_host not in config.TRUSTED_PROXIES:
         return client_host

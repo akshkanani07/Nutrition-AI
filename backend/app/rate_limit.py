@@ -33,36 +33,35 @@ class RateLimiter:
         self._hits: dict[str, list[float]] = {}
         self._lock = Lock()
 
-    def is_allowed(self, client_ip: str) -> bool:
+    def is_allowed(self, client_ip: str | None) -> bool:
         """Return True if the request is within the rate limit.
 
-        Any client IP that is not a valid IP address will not create a bucket
-        and is immediately disallowed.
+        Invalid or missing client hosts map to one fixed bucket key 'unknown'
+        with the normal limit, ensuring invalid IP strings never create their
+        own bucket.
         After pruning, if the list is empty, the key is deleted from _hits.
         """
-        if not is_valid_ip(client_ip):
-            return False
+        key = client_ip.strip() if (client_ip and is_valid_ip(client_ip)) else "unknown"
 
-        ip = client_ip.strip()
         now = time.monotonic()
         cutoff = now - self._window
 
         with self._lock:
-            timestamps = self._hits.get(ip, [])
+            timestamps = self._hits.get(key, [])
             # Prune old entries
             pruned = [t for t in timestamps if t > cutoff]
 
             if not pruned:
-                self._hits.pop(ip, None)
+                self._hits.pop(key, None)
             else:
-                self._hits[ip] = pruned
+                self._hits[key] = pruned
 
             if len(pruned) >= self._max:
                 return False
 
-            if ip not in self._hits:
-                self._hits[ip] = []
-            self._hits[ip].append(now)
+            if key not in self._hits:
+                self._hits[key] = []
+            self._hits[key].append(now)
             return True
 
     def prune(self, now: float | None = None) -> None:

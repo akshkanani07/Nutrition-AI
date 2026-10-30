@@ -344,9 +344,27 @@ class TestRateLimit:
         limiter = RateLimiter(max_requests=5, window_seconds=60)
         invalid_ips = ["not-an-ip", "999.999.999.999", "", "abc.def", "127.0.0.1; DROP TABLE"]
         for bad_ip in invalid_ips:
-            assert limiter.is_allowed(bad_ip) is False
+            assert limiter.is_allowed(bad_ip) is True
             assert bad_ip not in limiter._hits
-        assert len(limiter._hits) == 0
+        assert "unknown" in limiter._hits
+        assert len(limiter._hits["unknown"]) == 5
+
+        # 6th request with an invalid IP exceeds the single "unknown" bucket
+        assert limiter.is_allowed("another-invalid-ip") is False
+        assert len(limiter._hits) == 1
+
+    def test_default_testclient_host_maps_to_unknown_bucket(self):
+        app = create_app()
+        # Default TestClient has client=("testclient", 50000), which is not an IP
+        tc = TestClient(app)
+        data = make_jpeg()
+        resp = tc.post(
+            "/api/v1/analyze-food",
+            files={"image": ("test.jpg", io.BytesIO(data), "image/jpeg")},
+        )
+        assert resp.status_code == 200
+        assert "unknown" in app.state.rate_limiter._hits
+        assert "testclient" not in app.state.rate_limiter._hits
 
 
 # ---------------------------------------------------------------------------
