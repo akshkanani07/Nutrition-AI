@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import io
-import struct
 
 from PIL import Image, ImageOps
 
@@ -91,4 +90,3 @@ def validate_and_preprocess(
         img = img.resize((new_w, new_h), Image.LANCZOS)
 
     return img, mime
-

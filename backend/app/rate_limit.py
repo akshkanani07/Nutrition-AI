@@ -35,3 +35,7 @@ class RateLimiter:
             self._hits[client_ip].append(now)
             return True
 
+    def reset(self) -> None:
+        """Reset all rate limit counters."""
+        with self._lock:
+            self._hits.clear()

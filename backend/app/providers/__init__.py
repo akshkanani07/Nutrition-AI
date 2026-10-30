@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from app.providers.mock_provider import MockProvider
 from app.providers.ml_provider import MLModelProvider
+from app.providers.mock_provider import MockProvider
 
-__all__ = ["MockProvider", "MLModelProvider"]
-
+__all__ = ["MLModelProvider", "MockProvider"]

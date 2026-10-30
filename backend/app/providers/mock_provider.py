@@ -12,7 +12,6 @@ from app.nutrition import (
     sum_nutrition,
 )
 
-
 # Hardcoded demo food entry (never presented as real ML output)
 _DEMO_FOOD = {
     "food_key": "demo_salad",
@@ -63,4 +62,3 @@ class MockProvider:
             "score": score,
             "advice": advice,
         }
-

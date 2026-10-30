@@ -1,27 +1,34 @@
-"""Application configuration loaded from environment variables."""
+"""Application configuration loaded from backend/.env using python-dotenv."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
+# Ensure offline operation before any library import
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 from dotenv import load_dotenv
 
-# Load .env from the backend directory (two levels up from this file)
+# Explicitly load environment variables from backend/.env
 _backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(_backend_dir / ".env")
 
 # ---------------------------------------------------------------------------
-# Provider
+# Environment & Provider
 # ---------------------------------------------------------------------------
-AI_PROVIDER: str = os.getenv("AI_PROVIDER", "mock")
+APP_ENV: str = os.getenv("APP_ENV", "development").lower()
+AI_PROVIDER: str = os.getenv("AI_PROVIDER", "mock").lower()
 ALLOW_MOCK: bool = os.getenv("ALLOW_MOCK", "false").lower() in ("true", "1", "yes")
 
 # ---------------------------------------------------------------------------
-# Offline mode
+# CORS
 # ---------------------------------------------------------------------------
-HF_HUB_OFFLINE: str = os.getenv("HF_HUB_OFFLINE", "1")
-TRANSFORMERS_OFFLINE: str = os.getenv("TRANSFORMERS_OFFLINE", "1")
+_origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+ALLOWED_ORIGINS: list[str] = [
+    origin.strip() for origin in _origins_env.split(",") if origin.strip()
+]
 
 # ---------------------------------------------------------------------------
 # Image validation
@@ -37,9 +44,9 @@ MAX_LONG_SIDE_PX: int = 1024
 RATE_LIMIT_MAX_REQUESTS: int = 10
 RATE_LIMIT_WINDOW_SECONDS: int = 60
 TRUSTED_PROXIES: list[str] = [
-    p.strip()
-    for p in os.getenv("TRUSTED_PROXIES", "127.0.0.1").split(",")
-    if p.strip()
+    proxy.strip()
+    for proxy in os.getenv("TRUSTED_PROXIES", "127.0.0.1").split(",")
+    if proxy.strip()
 ]
 
 # ---------------------------------------------------------------------------
@@ -55,4 +62,3 @@ FOOD_MASTER_PATH = ML_DIR / "data" / "annotations" / "food_master.csv"
 # App metadata
 # ---------------------------------------------------------------------------
 APP_VERSION: str = "0.1.0"
-
